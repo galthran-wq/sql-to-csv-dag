@@ -195,3 +195,43 @@ def convert_file(
     else:
         raise ValueError(f"Unsupported file type: {file_type}")
     return output_file_path
+
+
+def convert_all_files(root_folder: str, files_to_convert: list[str]):
+    output_root_folder = root_folder + "_output"
+    success_files = []
+    for file in files_to_convert:
+        relative_file_path = os.path.relpath(file, root_folder)
+        try:
+            output_file_path = convert_file(
+                root_folder=root_folder,
+                relative_file_path=relative_file_path,
+                output_root_folder=output_root_folder,
+            )
+            success_files.append(output_file_path)
+            logging.info(f"Successfully converted file {file} to {output_file_path}")
+        except Exception as e:
+            logging.error(f"Failed to convert file {file} to {output_file_path}: {e}")
+    return success_files
+
+
+def cleanup_success_converted_file(success_file_path: str, mariadb_client: MariaDBClient | None = None):
+    """
+    Cleans up the successfully converted file by removing it from the filesystem.
+    
+    Args:
+        success_file_path (str): The path to the successfully converted file.
+    """
+    if success_file_path.endswith(".csv"):
+        return
+    elif os.path.isdir(success_file_path):
+        dir_name = os.path.basename(success_file_path)
+        if mariadb_client is None:
+            raise ValueError("mariadb_client is required to cleanup successfully converted files")
+        databases = mariadb_client.get_databases()
+        if dir_name in databases:
+            mariadb_client.drop_database(dir_name)
+        else:
+            logging.warning(f"Database {dir_name} does not exist and cannot be dropped")
+    else:
+        raise ValueError(f"Unsupported file type: {success_file_path}")
