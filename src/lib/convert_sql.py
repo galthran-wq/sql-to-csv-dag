@@ -153,6 +153,9 @@ def convert_file(
             if mariadb_client is None:
                 raise ValueError("mariadb_client is required to convert .sql files with table definitions")
             # We assume that it is a proper mysql dump
+            databases = mariadb_client.get_databases()
+            while filename in databases:
+                filename = filename + "_"
             mariadb_client.source_sql(
                 file_path, 
                 db=filename, 
