@@ -1,3 +1,4 @@
+import logging
 import os
 from collections import defaultdict
 import os
@@ -9,6 +10,30 @@ from tqdm.auto import tqdm
 
 from src.common.utils import split_ignoring_strings
 from src.lib.mariadb_tools import MariaDBClient
+
+
+def get_files_to_convert(root_folder: str):
+    """
+    Returns a list of files to convert (to .csv).
+    Supports the following file formats: 
+    - .sql
+    - .csv
+    - .sql.gz
+    """
+    files_to_convert = []
+    total = 0
+    skipped = 0
+    for root, _, files in os.walk(root_folder):
+        for file in files:
+            total += 1
+            if file.endswith(".sql") or file.endswith(".csv") or file.endswith(".sql.gz"):
+                files_to_convert.append(os.path.join(root, file))
+            else:
+                skipped += 1
+                logging.warning(f"Skipping file {file} because it is not a valid file to convert")
+                logging.warning(f"File path: {os.path.join(root, file)}")
+    logging.info(f"Total files: {total}, skipped: {skipped}")
+    return files_to_convert
 
 
 def extract_tables_from_sql(file, print_on_error=True, output_path=None):
