@@ -17,24 +17,25 @@ GET_TABLES_SQL = "SELECT name FROM sqlite_schema WHERE type='table';"
 GET_TABLES_SQL = "SHOW TABLES;"
 GET_COLUMNS_SQL = f'SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = N"{TABLE_PARAMETER}"'
 
-def get_conn(database, user="root", password="password", host="localhost", port=3306):
+def get_conn(database=None, user="root", password="password", host="localhost", port=3306):
     conn = mariadb.connect(
         user=user,
         password=password,
         host=host,
         port=port,
     )
-    cur = conn.cursor()
-    cur.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
-    cur.close()
-    conn.close()
-    conn = mariadb.connect(
-        user=user,
-        password=password,
-        host=host,
-        port=port,
-        database=database
-    )
+    if database is not None:
+        cur = conn.cursor()
+        cur.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
+        cur.close()
+        conn.close()
+        conn = mariadb.connect(
+            user=user,
+            password=password,
+            host=host,
+            port=port,
+            database=database
+        )
     return conn
 
 def delete_all_tables(con):
@@ -102,14 +103,17 @@ def dump_mariadb_db(database: str, output_path: str):
             except Exception as e:
                 logger.error(f"Tryied dumping {table}, error: {str(e)}")
 
+def get_databases():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SHOW DATABASES;")
+    databases = [db[0] for db in cur.fetchall()]
+    cur.close()
+    return databases
+
 
 def dump_all_dbs(output_path: str):
     output_path = Path(output_path)
-    # Connect to get list of databases
-    conn = get_conn("test")
-    cursor = conn.cursor()
-    cursor.execute("SHOW DATABASES;")
-    databases = [db[0] for db in cursor.fetchall()]
     
     # Filter out system databases
     system_dbs = {'mysql', 'information_schema', 'performance_schema', 'sys', 'test', 'airflow'}
