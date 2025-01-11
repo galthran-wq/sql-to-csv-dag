@@ -197,7 +197,11 @@ def convert_file(
     return output_file_path
 
 
-def convert_all_files(root_folder: str, files_to_convert: list[str]):
+def convert_all_files(
+    root_folder: str, 
+    files_to_convert: list[str],
+    mariadb_client: MariaDBClient | None = None,
+):
     output_root_folder = root_folder + "_output"
     success_files = []
     for file in files_to_convert:
@@ -207,6 +211,7 @@ def convert_all_files(root_folder: str, files_to_convert: list[str]):
                 root_folder=root_folder,
                 relative_file_path=relative_file_path,
                 output_root_folder=output_root_folder,
+                mariadb_client=mariadb_client,
             )
             success_files.append(output_file_path)
             logging.info(f"Successfully converted file {file} to {output_file_path}")
