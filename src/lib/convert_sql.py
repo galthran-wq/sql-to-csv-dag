@@ -204,7 +204,10 @@ def convert_all_files(
 ):
     output_root_folder = root_folder + "_output"
     success_files = []
+    total = 0
+    skipped = 0
     for file in files_to_convert:
+        total += 1
         relative_file_path = os.path.relpath(file, root_folder)
         try:
             output_file_path = convert_file(
@@ -214,9 +217,11 @@ def convert_all_files(
                 mariadb_client=mariadb_client,
             )
             success_files.append(output_file_path)
-            logging.info(f"Successfully converted file {file} to {output_file_path}")
+            logger.info(f"Successfully converted file {file} to {output_file_path}")
         except Exception as e:
-            logging.error(f"Failed to convert file {file} to {output_file_path}: {e}")
+            skipped += 1
+            logger.error(f"Failed to convert file {file} to {output_file_path}: {e}")
+    logger.info(f"Total files converted: {total}, skipped: {skipped}")
     return success_files
 
 
@@ -240,3 +245,19 @@ def cleanup_success_converted_file(success_file_path: str, mariadb_client: Maria
             logging.warning(f"Database {dir_name} does not exist and cannot be dropped")
     else:
         raise ValueError(f"Unsupported file type: {success_file_path}")
+
+
+def cleanup_all_success_converted_files(
+    success_files: list[str], 
+    mariadb_client: MariaDBClient | None = None,
+):
+    total = 0
+    skipped = 0
+    for success_file in success_files:
+        total += 1
+        try:
+            cleanup_success_converted_file(success_file, mariadb_client)
+        except Exception as e:
+            skipped += 1
+            logger.error(f"Failed to cleanup file {success_file}: {e}")
+    logger.info(f"Total files cleaned up: {total}, skipped: {skipped}")
