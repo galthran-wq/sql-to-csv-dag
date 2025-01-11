@@ -11,6 +11,8 @@ from tqdm.auto import tqdm
 from src.common.utils import split_ignoring_strings
 from src.lib.mariadb_tools import MariaDBClient
 
+logger = logging.getLogger(__name__)
+
 
 def get_files_to_convert(root_folder: str):
     """
@@ -55,7 +57,7 @@ def extract_tables_from_sql(file, print_on_error=True, output_path=None):
                 if new_table_name != table_name:
                     dfs[table_name].append(pd.DataFrame(values, columns=columns))
                 values = []
-                print(f"New table: {new_table_name}")
+                logger.info(f"New table: {new_table_name}")
                 header = row
                 columns = [ col.strip()[1:-1] for col in split_ignoring_strings(header[header.find("(")+1:header.find(")")]) ]
             # first_sep = row.find("`")
@@ -85,14 +87,14 @@ def extract_tables_from_sql(file, print_on_error=True, output_path=None):
                 values.append(clean_row)
             else:
                 if print_on_error:
-                    print(f"Invalid entry: {row}")
+                    logger.warning(f"Invalid entry: {row}")
                 invalid_lines += 1
                 # if invalid_lines % 10_000 == 0:
                 #     print(f"Invalid_line: {row}")
             if output_path is not None and len(values) > 500_000:
                 table_output_path = output_path + f"/{table_name}.csv"
                 header = not os.path.exists(table_output_path)
-                print(f"Intermediate dump to {table_output_path}...")
+                logger.info(f"Intermediate dump to {table_output_path}...")
                 pd.DataFrame(values, columns=columns).to_csv(
                     table_output_path,
                     sep="|",
@@ -103,7 +105,7 @@ def extract_tables_from_sql(file, print_on_error=True, output_path=None):
                 values = []
     if values is not None and len(values) > 0:
         dfs[table_name].append(pd.DataFrame(values, columns=columns))
-    print(f"Total number of invalid lines: {invalid_lines}")
+    logger.info(f"Total number of invalid lines: {invalid_lines}")
     dfs = {
         table: pd.concat(table_dfs, axis=0)
         for table, table_dfs in dfs.items()
@@ -112,7 +114,7 @@ def extract_tables_from_sql(file, print_on_error=True, output_path=None):
         for table_name, df in dfs.items():
             table_output_path = output_path + f"/{table_name}.csv"
             header = not os.path.exists(table_output_path)
-            print(f"dump to {table_output_path}...")
+            logger.info(f"dump to {table_output_path}...")
             df.to_csv(
                 table_output_path,
                 sep="|",
