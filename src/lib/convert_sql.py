@@ -1,11 +1,14 @@
 import os
 from collections import defaultdict
+import os
+from typing import List, Dict
+import gzip
 
 import pandas as pd
 from tqdm.auto import tqdm
 
-
 from src.common.utils import split_ignoring_strings
+from src.lib.mariadb_tools import MariaDBClient
 
 
 def extract_tables_from_sql(file, print_on_error=True, output_path=None):
@@ -94,3 +97,71 @@ def extract_tables_from_sql(file, print_on_error=True, output_path=None):
             )
     else:
         return dfs
+
+
+def convert_file(
+    root_folder: str,
+    relative_file_path: str, 
+    output_root_folder: str,
+    output_file_path: str | None = None,
+    mariadb_client: MariaDBClient | None = None,
+):
+    """
+    Converts a file (containing some number of tables) to a list of .csv files.
+    If .csv is passed, it is simply moved to the same relative location in output_root_folder.
+
+    Supports the following file formats: 
+    - .sql
+    - .csv
+    - .sql.gz
+    """
+    file_path = os.path.join(root_folder, relative_file_path)
+
+    # convert .sql.gz file to .sql
+    if file_path.endswith(".sql.gz"):
+        with gzip.open(file_path, 'rb') as f:
+            sql_content = f.read()
+        with open(file_path.replace(".sql.gz", ".sql"), 'w') as f:
+            f.write(sql_content)
+        os.remove(file_path)
+        file_path = file_path.replace(".sql.gz", ".sql")
+    
+    file_type = file_path.split(".")[-1]
+
+    if output_file_path is None and file_type != "csv":
+        filename = os.path.basename(file_path)
+        output_file_path = os.path.join(output_root_folder, filename)
+
+    if file_type == "sql":
+        has_table_definitions = False
+        with open(file_path, 'r') as f:
+            for line in f:
+                if "CREATE TABLE" in line:
+                    has_table_definitions = True
+                    break
+        if not has_table_definitions:
+            # We assume that the file looks like:
+            # INSERT INTO table_name (column1, column2, column3) VALUES (value1, value2, value3);
+            # INSERT INTO table_name (column1, column2, column3) VALUES (value1, value2, value3);
+            # ...
+            database_to_df: Dict[str, pd.DataFrame] = extract_tables_from_sql(
+                file_path, output_path=output_file_path
+            )
+            for database_name, df in database_to_df.items():
+                df.to_csv(os.path.join(output_file_path, f"{database_name}.csv"), index=False)
+        else:
+            if mariadb_client is None:
+                raise ValueError("mariadb_client is required to convert .sql files with table definitions")
+            # We assume that it is a proper mysql dump
+            mariadb_client.source_sql(
+                file_path, 
+                db=filename, 
+                logfile=None, 
+                encoding="utf-8", 
+            )
+            mariadb_client.dump_mariadb_db(database=filename, output_path=output_file_path)
+    elif file_type == "csv":
+        pass
+    else:
+        raise ValueError(f"Unsupported file type: {file_type}")
+    return output_file_path
