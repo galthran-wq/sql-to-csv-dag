@@ -53,7 +53,7 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: SequentialExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+mysqlconnector://airflow:airflow@mariadb/airflow
     # For backward compatibility, with Airflow <2.3
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
@@ -72,10 +72,25 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
-    - ./airflow.db:/opt/airflow/airflow.db
   user: "${AIRFLOW_UID:-50000}:0"
 
 services:
+  mariadb:
+    image: mariadb:10.5
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: airflow
+      MYSQL_USER: airflow
+      MYSQL_PASSWORD: airflow
+    volumes:
+      - /data2/airflow/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
   airflow-webserver:
     <<: *airflow-common
     command: webserver
@@ -89,8 +104,8 @@ services:
       start_period: 30s
     restart: always
     depends_on:
-      airflow-init:
-        condition: service_completed_successfully
+      - airflow-init
+      - mariadb
 
   airflow-scheduler:
     <<: *airflow-common
@@ -103,9 +118,8 @@ services:
       start_period: 30s
     restart: always
     depends_on:
-      airflow-init:
-        condition: service_completed_successfully
-
+      - airflow-init
+      - mariadb
 
   airflow-init:
     <<: *airflow-common
@@ -184,6 +198,8 @@ services:
     user: "0:0"
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
+    depends_on:
+      - mariadb
 
   airflow-cli:
     <<: *airflow-common
@@ -218,4 +234,7 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+
+volumes:
+  mysql_data:
 
