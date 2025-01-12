@@ -23,7 +23,7 @@ class Config(BaseModel):
     @classmethod
     def from_yaml(cls, path: str):
         with open(path, "r") as f:
-            return cls.model_validate(yaml.safe_load(f), strict=True)
+            return cls.parse_obj(yaml.safe_load(f))
 
 
 def get_config(path: str | None = None) -> Config:

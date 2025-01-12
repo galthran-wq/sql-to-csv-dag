@@ -4,6 +4,9 @@ requests==2.32.3
 mega.py==1.0.0
 rarfile==4.2
 py7zip==0.6.2
-pydantic==2.10.5
+pydantic==1.10.20
 tqdm==4.67.1
 mariadb==1.1.11
+py7zr==0.22.0
+# for mega.py
+pycryptodome==3.21.0
