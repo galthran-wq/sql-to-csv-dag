@@ -39,7 +39,7 @@ def get_files_to_convert(root_folder: str):
     return files_to_convert
 
 
-def extract_tables_from_sql(file, print_on_error=True, output_path=None):
+def extract_tables_from_sql(file, print_on_error=False, output_path=None):
     lines_it = open(file)
     dfs = defaultdict(list)
 
@@ -133,6 +133,7 @@ def convert_file(
     output_root_folder: str,
     output_file_path: str | None = None,
     mariadb_client: MariaDBClient | None = None,
+    sep: str = "|",
 ):
     """
     Converts a file (containing some number of tables) to a list of .csv files.
@@ -173,10 +174,12 @@ def convert_file(
             # INSERT INTO table_name (column1, column2, column3) VALUES (value1, value2, value3);
             # ...
             database_to_df: Dict[str, pd.DataFrame] = extract_tables_from_sql(
-                file_path, output_path=output_file_path
+                file_path
             )
+            os.makedirs(output_file_path, exist_ok=True)
             for database_name, df in database_to_df.items():
-                df.to_csv(os.path.join(output_file_path, f"{database_name}.csv"), index=False)
+                if len(df) > 0:
+                    df.to_csv(os.path.join(output_file_path, f"{database_name}.csv"), index=False, sep=sep)
         else:
             if mariadb_client is None:
                 raise ValueError("mariadb_client is required to convert .sql files with table definitions")
@@ -204,7 +207,6 @@ def convert_all_files(
     mariadb_client: MariaDBClient | None = None,
 ):
     output_root_folder = root_folder + "_output"
-    success_files = []
     total = 0
     skipped = 0
     for file in files_to_convert:
@@ -217,13 +219,14 @@ def convert_all_files(
                 output_root_folder=output_root_folder,
                 mariadb_client=mariadb_client,
             )
-            success_files.append(output_file_path)
             logger.info(f"Successfully converted file {file} to {output_file_path}")
         except Exception as e:
             skipped += 1
-            logger.error(f"Failed to convert file {file} to {output_file_path}: {e}")
+            logger.error(f"Failed to convert file {file}: {e}")
     logger.info(f"Total files converted: {total}, skipped: {skipped}")
-    return success_files
+    if total == skipped:
+        raise ValueError("No files were converted!")
+    return output_root_folder
 
 
 def cleanup_success_converted_file(success_file_path: str, mariadb_client: MariaDBClient | None = None):
