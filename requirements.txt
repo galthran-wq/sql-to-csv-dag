@@ -1,0 +1,8 @@
+apache-airflow==2.7.0
+pandas
+requests
+mega.py
+rarfile
+py7zip
+pydantic
+tqdm
