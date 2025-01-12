@@ -29,7 +29,7 @@ def download_file_from_mega(mega_url: str, artifacts_folder: str, mega_email: st
             if line.startswith("Download finished:"):
                 downloaded_path = line.split("Download finished:")[1].strip()
                 if downloaded_path.startswith(artifacts_folder):
-                    downloaded_path = os.path.relpath(downloaded_path, artifacts_folder)
+                    downloaded_path = os.path.join(artifacts_folder, os.path.relpath(downloaded_path, artifacts_folder))
                 break
         else:
             downloaded_path = None
