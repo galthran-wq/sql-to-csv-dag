@@ -3,7 +3,12 @@ FROM apache/airflow:2.7.0
 # Install necessary packages as root
 USER root
 RUN apt-get update && \
-    apt-get install -y python3.8-dev build-essential software-properties-common wget curl gnupg && \
+    apt-get install -y software-properties-common gnupg && \
+    # Add the missing GPG keys
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32 871920D1991BC93C && \
+    echo "deb http://archive.ubuntu.com/ubuntu/ focal multiverse" >> /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y python3.8-dev build-essential unrar unzip p7zip-full p7zip-rar wget curl && \
     # Download and run the MariaDB repository setup script
     wget https://r.mariadb.com/downloads/mariadb_repo_setup && \
     chmod +x mariadb_repo_setup && \
