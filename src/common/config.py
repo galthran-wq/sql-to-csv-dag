@@ -19,6 +19,7 @@ class Config(BaseModel):
     artifacts_dir: str
     mega: MegaConfig
     mariadb: MariaDBConfig
+    telegram_token: str
 
     @classmethod
     def from_yaml(cls, path: str):

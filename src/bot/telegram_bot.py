@@ -6,6 +6,10 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import requests
 
+from src.common.config import get_config
+
+config = get_config()
+
 # Configure logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -14,7 +18,7 @@ AIRFLOW_API_URL = f"http://{os.environ.get('AIRFLOW_API_HOST', 'localhost')}:{os
 AUTH = ('airflow', 'airflow')
 
 # Your Telegram bot token
-TELEGRAM_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
+TELEGRAM_TOKEN = config.telegram_token
 
 def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_text('Hi! Send me a MEGA link to start the conversion process.')

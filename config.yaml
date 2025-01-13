@@ -7,3 +7,4 @@ mariadb:
   password: "airflow"
   host: "mariadb"
   port: 3306
+telegram_token: "YOUR_TELEGRAM_BOT_TOKEN"
