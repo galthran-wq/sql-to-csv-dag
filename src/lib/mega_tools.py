@@ -35,8 +35,8 @@ def download_file_from_mega(mega_url: str, artifacts_folder: str, mega_email: st
             downloaded_path = None
         return downloaded_path
     except subprocess.CalledProcessError as e:
-        print(f"An error occurred during download: {e}")
-        return None
+        print(f"An error occurred during download: {e.stderr}")
+        raise
 
 def upload_file_to_mega(
     file_path: str,
