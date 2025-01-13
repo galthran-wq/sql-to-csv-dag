@@ -51,7 +51,10 @@ dag = DAG(
     schedule_interval=None,
     schedule=None,
     start_date=datetime(2023, 1, 1),
-    params={"mega_url": Param("public_link", type="string", description="your_mega_url")},
+    params={
+        "mega_url": Param("public_link", type="string", description="your_mega_url"),
+        "password": Param("", type="string", description="your_password"),
+    },
 )
 
 download_task = PythonOperator(
@@ -66,6 +69,7 @@ extract_task = PythonOperator(
     python_callable=extract_archive,
     op_kwargs={
         'archive_path': '{{ task_instance.xcom_pull(task_ids="download_file_from_mega") }}',
+        'password': '{{ params.password }}',
     },
     dag=dag,
 )
