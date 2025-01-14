@@ -52,7 +52,7 @@ x-airflow-common:
     dockerfile: docker/Dockerfile
   environment:
     &airflow-common-env
-    AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+mysqlconnector://airflow:airflow@mariadb/airflow
     # For backward compatibility, with Airflow <2.3
     AIRFLOW__CORE__FERNET_KEY: ''
@@ -76,7 +76,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/src:/opt/airflow/code/src
     - ${AIRFLOW_PROJ_DIR:-.}/config.yaml:/opt/airflow/config.yaml
-    - ${AIRFLOW_PROJ_DIR:-.}/artifacts:/opt/airflow/artifacts
+    - /data/sql-converter-artifacts:/opt/airflow/artifacts
   user: "${AIRFLOW_UID:-50000}:0"
 
 services:
@@ -89,6 +89,7 @@ services:
       MYSQL_PASSWORD: airflow
     volumes:
       - /data2/airflow/mysql:/var/lib/mysql
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
