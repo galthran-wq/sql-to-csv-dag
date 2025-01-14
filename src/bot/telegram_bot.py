@@ -42,10 +42,10 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
         if response.status_code == 200:
             dag_run_id = response.json().get('dag_run_id')
-            await update.message.reply_text("DAG triggered successfully! Monitoring execution...")
+            await update.message.reply_text("DAG triggered successfully! Monitoring execution in the background...")
 
-            # Monitor DAG execution
-            await monitor_dag_execution(update, dag_run_id)
+            # Monitor DAG execution in the background
+            asyncio.create_task(monitor_dag_execution(update, dag_run_id))
         else:
             await update.message.reply_text("Failed to trigger DAG.")
 
