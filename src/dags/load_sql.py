@@ -53,7 +53,7 @@ dag = DAG(
     start_date=datetime(2023, 1, 1),
     params={
         "mega_url": Param("public_link", type="string", description="your_mega_url"),
-        "password": Param("", type="string", description="your_password"),
+        "password": Param(default="", type=["null", "string"], description="your_password"),
     },
 )
 
