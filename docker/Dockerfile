@@ -14,7 +14,7 @@ RUN apt-get update && \
     chmod +x mariadb_repo_setup && \
     ./mariadb_repo_setup && \
     apt-get update && \
-    apt-get install -y libmariadb3 libmariadb-dev && \
+    apt-get install -y libmariadb3 libmariadb-dev mariadb-client && \
     # Add MEGAcmd repository and install MEGAcmd
     curl -sL https://mega.nz/linux/MEGAsync/Debian_11/Release.key | apt-key add - && \
     echo "deb https://mega.nz/linux/MEGAsync/Debian_11/ ./" > /etc/apt/sources.list.d/megacmd.list && \
