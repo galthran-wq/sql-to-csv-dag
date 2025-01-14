@@ -93,7 +93,7 @@ class MariaDBClient:
         if stdout:
             logger.info(stdout)
         if stderr:
-            raise Exception(stderr)
+            logger.error(stderr)
         if logfile is not None:
             with open(logfile, "a") as f:
                 if stdout is not None:
