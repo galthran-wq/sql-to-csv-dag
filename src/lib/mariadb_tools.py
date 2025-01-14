@@ -22,6 +22,13 @@ class MariaDBClient:
         self.host = host
         self.port = port
         self.conn = None
+    
+    def create_database(self, database: str):
+        self.get_conn()
+        cur = self.conn.cursor()
+        cur.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
+        cur.close()
+        self.conn.close()
 
     def get_conn(self, database=None):
         self.conn = mariadb.connect(
@@ -31,10 +38,7 @@ class MariaDBClient:
             port=self.port,
         )
         if database is not None:
-            cur = self.conn.cursor()
-            cur.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
-            cur.close()
-            self.conn.close()
+            self.create_database(database)
             self.conn = mariadb.connect(
                 user=self.user,
                 password=self.password,
@@ -70,7 +74,8 @@ class MariaDBClient:
         cur.close()
         return columns
 
-    def source_sql(self, sql_path, db, logfile=None, encoding="utf-8"):
+    def source_sql(self, sql_path, db, logfile=None, encoding="utf8"):
+        logger.info(f"Sourceing {sql_path} to {db}")
         process = Popen([
             'mariadb',
             f'--user={self.user}',
@@ -79,18 +84,22 @@ class MariaDBClient:
             f'--port={self.port}',
             f'--default-character-set={encoding}',
             '--max_allowed_packet=1073741824',
+            '--ssl=0',
             db,
         ], stdout=PIPE, stdin=PIPE, stderr=PIPE)
-        stdout, stderr = process.communicate(('source ' + str(sql_path)).encode("utf-8"))
+        stdout, stderr = process.communicate(('source ' + str(sql_path) + ";").encode("utf-8"))
+        stdout = stdout.decode("utf-8")
+        stderr = stderr.decode("utf-8")
+        if stdout:
+            logger.info(stdout)
+        if stderr:
+            raise Exception(stderr)
         if logfile is not None:
             with open(logfile, "a") as f:
                 if stdout is not None:
-                    print(stdout.decode("utf-8"))
-                    for line in stdout.decode("utf-8"):
-                        f.write(line)
+                    f.write(stdout.decode("utf-8"))
                 if stderr is not None:
-                    for line in stderr.decode("utf-8"):
-                        f.write(line)
+                    f.write(stderr.decode("utf-8"))
 
     def dump_mariadb_db(self, database: str, output_path: str):
         output_path = Path(output_path)

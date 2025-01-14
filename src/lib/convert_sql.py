@@ -160,6 +160,8 @@ def convert_file(
     if output_file_path is None and file_type != "csv":
         filename = os.path.basename(file_path)
         output_file_path = os.path.join(output_root_folder, filename)
+        database_name = filename.split(".")[0]
+        database_name = ''.join(e for e in database_name if e.isalnum() or e == '_')
 
     if file_type == "sql":
         has_table_definitions = False
@@ -181,19 +183,22 @@ def convert_file(
                 if len(df) > 0:
                     df.to_csv(os.path.join(output_file_path, f"{database_name}.csv"), index=False, sep=sep)
         else:
+            logger.info(f"Converting {file_path} to {output_file_path} with mariadb_client")
             if mariadb_client is None:
                 raise ValueError("mariadb_client is required to convert .sql files with table definitions")
             # We assume that it is a proper mysql dump
-            databases = mariadb_client.get_databases()
-            while filename in databases:
-                filename = filename + "_"
+            databases_before = mariadb_client.get_databases()
+            while database_name in databases_before:
+                database_name = database_name + "_"
+            mariadb_client.create_database(database_name)
             mariadb_client.source_sql(
                 file_path, 
-                db=filename, 
-                logfile=None, 
-                encoding="utf-8", 
+                db=database_name, 
             )
-            mariadb_client.dump_mariadb_db(database=filename, output_path=output_file_path)
+            databases_after = mariadb_client.get_databases()
+            for database in databases_after:
+                if database not in databases_before:
+                    mariadb_client.dump_mariadb_db(database=database, output_path=output_file_path)
     elif file_type == "csv":
         pass
     else:
