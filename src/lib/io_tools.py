@@ -39,16 +39,19 @@ def extract_archive(archive_path: str, extract_to: str | None = None, password: 
     return extract_to
 
 
-def archive(root_folder: str, archive_to: str | None = None):
+def archive(root_folder: str, archive_to: str | None = None, delete_if_exists: bool = True):
     """
     Archives all files in root_folder to archive_to. 
     Uses zip format.
     """
     if archive_to is None:
         archive_to = os.path.join(os.path.dirname(root_folder), os.path.basename(root_folder) + ".zip")
-
+    
     if os.path.exists(archive_to):
-        raise ValueError(f"Archive {archive_to} already exists")
+        if delete_if_exists:
+            os.remove(archive_to)
+        else:
+            raise ValueError(f"Archive {archive_to} already exists")
 
     with zipfile.ZipFile(archive_to, 'w') as archive:
         for root, _, files in os.walk(root_folder):
