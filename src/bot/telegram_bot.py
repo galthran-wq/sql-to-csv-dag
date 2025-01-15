@@ -6,6 +6,7 @@ import asyncio
 
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, filters, ApplicationBuilder
+from telegram.helpers import escape_markdown
 import requests
 
 from src.common.config import get_config
@@ -85,7 +86,10 @@ async def fetch_and_send_logs(update: Update, dag_run_id: str) -> None:
                     log_response = await client.get(log_url, auth=AUTH)
                     if log_response.status_code == 200:
                         logs = log_response.text
-                        await update.message.reply_text(f"Logs for task {task_id}:\n{logs}")
+                        # Split logs into chunks of 4000 characters
+                        for i in range(0, len(logs), 4000):
+                            chunk = logs[i:i+4000]
+                            await update.message.reply_text(f"```\n{escape_markdown(chunk)}\n```", parse_mode='MarkdownV2')
                     else:
                         await update.message.reply_text(f"Failed to fetch logs for task {task_id}.")
         else:
