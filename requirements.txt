@@ -7,3 +7,5 @@ pydantic==1.10.20
 tqdm==4.67.1
 mariadb==1.1.11
 py7zr==0.22.0
+zstandard==0.23.0
+

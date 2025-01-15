@@ -1,13 +1,21 @@
 from __future__ import annotations
 import os
+import shutil
 
 import zipfile
 import rarfile
 import tarfile
 import py7zr
+import zstandard as zstd
 
 
-def extract_archive(archive_path: str, extract_to: str | None = None, password: str | None = None):
+def extract_archive(
+    archive_path: str,
+    extract_to: str | None = None,
+    password: str | None = None,
+    archive_type: str | None = None,
+    include_trivial_types: bool = False,
+):
     """
     Extracts .../archive_name.zip to extract_to (or .../archive_name) folder. 
     Supports the following archive formats: 
@@ -15,6 +23,9 @@ def extract_archive(archive_path: str, extract_to: str | None = None, password: 
     - .rar
     - .tar.gz
     - .7z
+    - .zst
+
+    If `include_trivial_types` is True, then we are goint to "extract" .csv, .sql to the extract_to folder.
     """
     if password == "":
         password = None
@@ -36,6 +47,12 @@ def extract_archive(archive_path: str, extract_to: str | None = None, password: 
     elif archive_type == "gz":
         with tarfile.open(archive_path, 'r:gz') as archive:
             archive.extractall(extract_to)
+    elif archive_type == "zst":
+        with zstd.open(archive_path, 'r') as archive:
+            archive.extractall(extract_to)
+    if include_trivial_types:
+        if archive_type in ["sql", "csv"]:
+            shutil.copy(archive_path, extract_to)
     return extract_to
 
 
