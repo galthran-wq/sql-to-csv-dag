@@ -40,8 +40,8 @@ def get_files_to_convert(root_folder: str):
     return files_to_convert
 
 
-def extract_tables_from_sql(file, print_on_error=False, output_path=None):
-    lines_it = open(file)
+def extract_tables_from_sql(file, print_on_error=False, output_path=None, encoding="utf8", errors="ignore"):
+    lines_it = open(file, encoding=encoding, errors=errors)
     dfs = defaultdict(list)
 
     # current df data
