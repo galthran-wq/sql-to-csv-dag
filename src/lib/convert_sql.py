@@ -1,4 +1,5 @@
 from __future__ import annotations
+import shutil
 import logging
 import os
 from collections import defaultdict
@@ -156,12 +157,16 @@ def convert_file(
         file_path = file_path.replace(".sql.gz", ".sql")
     
     file_type = file_path.split(".")[-1]
+    filename = ".".join(os.path.basename(file_path).split(".")[:-1])
 
-    if output_file_path is None and file_type != "csv":
-        filename = os.path.basename(file_path)
-        output_file_path = os.path.join(output_root_folder, filename)
-        database_name = filename.split(".")[0]
-        database_name = ''.join(e for e in database_name if e.isalnum() or e == '_')
+    if output_file_path is None:
+        if file_type == "sql":
+            output_file_path = os.path.join(output_root_folder, filename)
+            database_name = ''.join(e for e in filename if e.isalnum() or e == '_')
+        elif file_type == "csv":
+            output_file_path = os.path.join(output_root_folder, os.path.basename(file_path))
+        else:
+            logger.warning(f"Unsupported file type: {file_type}")
 
     if file_type == "sql":
         has_table_definitions = False
@@ -200,7 +205,8 @@ def convert_file(
                 if database not in databases_before:
                     mariadb_client.dump_mariadb_db(database=database, output_path=output_file_path)
     elif file_type == "csv":
-        pass
+        os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+        shutil.move(file_path, output_file_path)
     else:
         raise ValueError(f"Unsupported file type: {file_type}")
     return output_file_path
