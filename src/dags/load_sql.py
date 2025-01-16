@@ -54,6 +54,7 @@ dag = DAG(
     params={
         "mega_url": Param("public_link", type="string", description="your_mega_url"),
         "password": Param(default="", type=["null", "string"], description="your_password"),
+        "id": Param(default="", type=["null", "string"], description="run_id"),
     },
 )
 
