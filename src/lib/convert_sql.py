@@ -201,9 +201,16 @@ def convert_file(
                 db=database_name, 
             )
             databases_after = mariadb_client.get_databases()
-            for database in databases_after:
-                if database not in databases_before:
-                    mariadb_client.dump_mariadb_db(database=database, output_path=output_file_path)
+            # 1. Try dumping `database_name`
+            total, errors = mariadb_client.dump_mariadb_db(database=database_name, output_path=output_file_path)
+            mariadb_client.delete_database(database_name)
+            # 2. Try dumping all other databases, if `database_name` is empty
+            # Motivation: some dumps might populate a different database than the one we use when sourcing the sql file
+            if total == 0:
+                for database in databases_after:
+                    if database not in databases_before and database != database_name:
+                        total, errors = mariadb_client.dump_mariadb_db(database=database, output_path=output_file_path)
+                        mariadb_client.delete_database(database_name)
     elif file_type == "csv":
         os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
         shutil.move(file_path, output_file_path)

@@ -105,6 +105,8 @@ class MariaDBClient:
         output_path = Path(output_path)
         self.get_conn(database)
         tables = self.get_tables()
+        total = 0
+        errors = 0
         for table in tables:
             os.makedirs(output_path / database, exist_ok=True)
             table_output_path = output_path / database / (table + ".csv")
@@ -114,8 +116,12 @@ class MariaDBClient:
                     if len(df) > 0:
                         logger.info(f"Dumping {table} with {len(df)} entries...")
                         df.to_csv(table_output_path, sep="|", escapechar='\\', index=False)
+                        total += 1
                 except Exception as e:
+                    errors += 1
                     logger.error(f"Tryied dumping {table}, error: {str(e)}")
+        logger.info(f"Dumped {total} tables with {errors} errors")
+        return total, errors
 
     def get_databases(self):
         self.get_conn()
