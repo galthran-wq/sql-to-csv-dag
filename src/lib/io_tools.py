@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import shutil
+import gzip
 
 import zipfile
 import rarfile
@@ -14,7 +15,7 @@ def extract_archive(
     extract_to: str | None = None,
     password: str | None = None,
     archive_type: str | None = None,
-    include_trivial_types: bool = False,
+    include_trivial_types: bool = True,
 ):
     """
     Extracts .../archive_name.zip to extract_to (or .../archive_name) folder. 
@@ -25,7 +26,7 @@ def extract_archive(
     - .7z
     - .zst
 
-    If `include_trivial_types` is True, then we are goint to "extract" .csv, .sql to the extract_to folder.
+    If `include_trivial_types` is True, then we are going to "extract" .csv, .sql, .gz to the extract_to folder.
     """
     if password == "":
         password = None
@@ -44,15 +45,16 @@ def extract_archive(
     elif archive_type == "tar":
         with tarfile.open(archive_path, 'r:') as archive:
             archive.extractall(extract_to)
-    elif archive_type == "gz":
+    elif archive_type == "tar.gz":
         with tarfile.open(archive_path, 'r:gz') as archive:
             archive.extractall(extract_to)
     elif archive_type == "zst":
         with zstd.open(archive_path, 'r') as archive:
             archive.extractall(extract_to)
     if include_trivial_types:
-        if archive_type in ["sql", "csv"]:
-            shutil.copy(archive_path, extract_to)
+        if archive_type in ["sql", "csv"] or archive_type.endswith(".gz"):
+            os.makedirs(extract_to, exist_ok=True)
+            shutil.copy(archive_path, os.path.join(extract_to, os.path.basename(archive_path)))
     return extract_to
 
 
