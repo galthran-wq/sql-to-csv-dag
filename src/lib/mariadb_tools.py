@@ -151,10 +151,21 @@ class MariaDBClient:
         data = cur.fetchall()
         columns = self.get_table_columns(table)
         columns = [column[3] for column in columns]
-        log.info(f"Columns for table {table}: {columns}")
         if len(data) > 0 and len(columns) != len(data[0]):
-            log.info("Columns misimatch")
+            logger.info("Columns misimatch")
             columns = columns[:len(data[0])]
-        log.info(f"Columns for table {table}: {columns}")
         return pd.DataFrame(data, columns=columns)
+
+    def delete_database(self, database: str):
+        """Deletes the specified database."""
+        self.get_conn()
+        cur = self.conn.cursor()
+        try:
+            cur.execute(f"DROP DATABASE IF EXISTS {database};")
+            logger.info(f"Database {database} deleted successfully.")
+        except mariadb.Error as e:
+            logger.error(f"Error deleting database {database}: {str(e)}")
+        finally:
+            cur.close()
+            self.conn.close()
 
