@@ -170,7 +170,7 @@ def convert_file(
 
     if file_type == "sql":
         has_table_definitions = False
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', errors="ignore") as f:
             for line in f:
                 if "CREATE TABLE" in line:
                     has_table_definitions = True
