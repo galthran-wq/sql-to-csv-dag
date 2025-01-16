@@ -25,8 +25,9 @@ def extract_archive(
     - .tar.gz
     - .7z
     - .zst
+    - .gz
 
-    If `include_trivial_types` is True, then we are going to "extract" .csv, .sql, .gz to the extract_to folder.
+    If `include_trivial_types` is True, then we are going to "extract" .csv, .sql to the extract_to folder.
     """
     if password == "":
         password = None
@@ -55,8 +56,14 @@ def extract_archive(
         with open(archive_path, 'rb') as f_in, open(zst_file_path, 'wb') as f_out:
             dctx = zstd.ZstdDecompressor()
             dctx.copy_stream(f_in, f_out)
+    elif archive_type == "gz":
+        gz_file_name = os.path.basename(archive_path).replace('.gz', '')
+        gz_file_path = os.path.join(extract_to, gz_file_name)
+        os.makedirs(extract_to, exist_ok=True)
+        with gzip.open(archive_path, 'rb') as f_in, open(gz_file_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
     if include_trivial_types:
-        if archive_type in ["sql", "csv"] or archive_type.endswith(".gz"):
+        if archive_type in ["sql", "csv"]:
             os.makedirs(extract_to, exist_ok=True)
             shutil.copy(archive_path, os.path.join(extract_to, os.path.basename(archive_path)))
     return extract_to
