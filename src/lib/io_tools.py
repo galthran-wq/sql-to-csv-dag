@@ -49,8 +49,12 @@ def extract_archive(
         with tarfile.open(archive_path, 'r:gz') as archive:
             archive.extractall(extract_to)
     elif archive_type == "zst":
-        with zstd.open(archive_path, 'r') as archive:
-            archive.extractall(extract_to)
+        zst_file_name = os.path.basename(archive_path).replace('.zst', '')
+        zst_file_path = os.path.join(extract_to, zst_file_name)
+        os.makedirs(extract_to, exist_ok=True)
+        with open(archive_path, 'rb') as f_in, open(zst_file_path, 'wb') as f_out:
+            dctx = zstd.ZstdDecompressor()
+            dctx.copy_stream(f_in, f_out)
     if include_trivial_types:
         if archive_type in ["sql", "csv"] or archive_type.endswith(".gz"):
             os.makedirs(extract_to, exist_ok=True)
