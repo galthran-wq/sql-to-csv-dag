@@ -207,6 +207,7 @@ def convert_file(
             # 2. Try dumping all other databases, if `database_name` is empty
             # Motivation: some dumps might populate a different database than the one we use when sourcing the sql file
             if total == 0:
+                logger.info(f"Dumping all other new databases: {databases_after}; since {database_name} is empty..")
                 for database in databases_after:
                     if database not in databases_before and database != database_name:
                         total, errors = mariadb_client.dump_mariadb_db(database=database, output_path=output_file_path)
