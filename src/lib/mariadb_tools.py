@@ -149,6 +149,7 @@ class MariaDBClient:
         self.conn.close()
 
     def table_to_df(self, table, log, limit=None):
+        # TODO: maybe use native mysql client for this
         cur = self.conn.cursor()
         if limit is None:
             cur.execute(f"select * from {table}")
@@ -157,8 +158,10 @@ class MariaDBClient:
         data = cur.fetchall()
         columns = self.get_table_columns(table)
         columns = [column[3] for column in columns]
+        logger.info(f"Columns: {columns}")
         if len(data) > 0 and len(columns) != len(data[0]):
-            logger.info("Columns misimatch")
+            logger.warning("Columns mismatch!")
+            logger.warning(f"First row: {data[0]}")
             columns = columns[:len(data[0])]
         return pd.DataFrame(data, columns=columns)
 

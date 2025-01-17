@@ -3,7 +3,6 @@ import logging
 import time
 import httpx
 import asyncio
-import uuid
 
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, filters, ApplicationBuilder
@@ -29,33 +28,34 @@ TELEGRAM_TOKEN = config.telegram_token
 STATE_DICT = {}
 
 async def start(update: Update, context: CallbackContext) -> None:
+    logging.info("Received /start command from user: %s", update.message.from_user.id)
     await update.message.reply_text('Hi! Send me a MEGA link to start the conversion process.')
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
     telegram_id = update.message.from_user.id
+    logging.info("Received message from user %s: %s", telegram_id, text)
     if "mega.nz" in text:
         # Extract MEGA link
         mega_link = text.split()[0]  # Assuming the link is the first word
+        logging.info("Extracted MEGA link: %s", mega_link)
         await update.message.reply_text(f"Received MEGA link: {mega_link}. Starting conversion...")
-
-        # Generate a unique ID for this task
-        unique_id = str(uuid.uuid4())
 
         # Trigger Airflow DAG
         response = requests.post(
             AIRFLOW_API_URL,
-            json={"conf": {"mega_url": mega_link, "id": unique_id}},
+            json={"conf": {"mega_url": mega_link}},
             auth=AUTH
         )
 
         if response.status_code == 200:
             dag_run_id = response.json().get('dag_run_id')
+            logging.info("DAG triggered successfully with ID: %s", dag_run_id)
             await update.message.reply_text("DAG triggered successfully! Monitoring execution in the background...")
 
             # Update STATE_DICT with the new task
             task_info = {
-                "id": unique_id,  # Store the unique ID
+                "id": dag_run_id,
                 "date": time.time(),
                 "parameters": {"mega_url": mega_link},
                 "resulting_link": None,
@@ -71,9 +71,11 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
             # Monitor DAG execution in the background
             asyncio.create_task(monitor_dag_execution(update, dag_run_id, telegram_id))
         else:
+            logging.error("Failed to trigger DAG. Status code: %s", response.status_code)
             await update.message.reply_text("Failed to trigger DAG.")
 
 async def monitor_dag_execution(update: Update, dag_run_id: str, telegram_id: int) -> None:
+    logging.info("Monitoring DAG execution for DAG ID: %s", dag_run_id)
     status_url = f"{AIRFLOW_API_URL}/{dag_run_id}"
     task_instances_url = f"{AIRFLOW_API_URL}/{dag_run_id}/taskInstances"
     async with httpx.AsyncClient() as client:
@@ -93,6 +95,8 @@ async def monitor_dag_execution(update: Update, dag_run_id: str, telegram_id: in
                             current_task_name = task_instance['task_id']
                             break
 
+                logging.info("DAG ID %s is in state: %s; step: %s", dag_run_id, state, current_task_name)
+
                 # Update the current step and status in STATE_DICT
                 for task in STATE_DICT.get(telegram_id, []):
                     if task["parameters"]["mega_url"] == response_data.get("conf", {}).get("mega_url"):
@@ -110,11 +114,13 @@ async def monitor_dag_execution(update: Update, dag_run_id: str, telegram_id: in
                     await fetch_and_send_logs(update, dag_run_id)
                     break
             else:
+                logging.error("Failed to retrieve DAG status for DAG ID: %s", dag_run_id)
                 await update.message.reply_text("Failed to retrieve DAG status.")
                 break
             await asyncio.sleep(60)
 
 async def fetch_and_send_logs(update: Update, dag_run_id: str) -> None:
+    logging.info("Fetching logs for DAG ID: %s", dag_run_id)
     # Fetch logs for the failed task
     logs_url = f"{AIRFLOW_API_URL}/{dag_run_id}/taskInstances"
     async with httpx.AsyncClient() as client:
@@ -135,17 +141,19 @@ async def fetch_and_send_logs(update: Update, dag_run_id: str) -> None:
                     else:
                         await update.message.reply_text(f"Failed to fetch logs for task {task_id}.")
         else:
+            logging.error("Failed to fetch task instances for DAG ID: %s", dag_run_id)
             await update.message.reply_text("Failed to fetch task instances.")
 
 async def retrieve_resulting_link(update: Update, dag_run_id: str, telegram_id: int) -> None:
+    logging.info("Retrieving resulting link for DAG ID: %s", dag_run_id)
     # the last task's ID is known and it stores the output link in XCom
     last_task_id = "upload_files_to_mega"
-    xcom_url = f"{AIRFLOW_API_URL}/{dag_run_id}/taskInstances/{last_task_id}/xcomEntries"
+    xcom_url = f"{AIRFLOW_API_URL}/{dag_run_id}/taskInstances/{last_task_id}/xcomEntries/return_value"
     async with httpx.AsyncClient() as client:
         response = await client.get(xcom_url, auth=AUTH)
         if response.status_code == 200:
             xcom_data = response.json()
-            resulting_link = xcom_data.get('resulting_link')  # Adjust based on actual XCom key
+            resulting_link = xcom_data.get('value')
             if resulting_link:
                 await update.message.reply_text(f"Resulting link: {resulting_link}")
 
@@ -160,10 +168,12 @@ async def retrieve_resulting_link(update: Update, dag_run_id: str, telegram_id: 
                 print(xcom_data)
                 await update.message.reply_text("Failed to retrieve the resulting link.")
         else:
+            logging.error("Failed to retrieve XCom data for DAG ID: %s", dag_run_id)
             await update.message.reply_text("Failed to retrieve XCom data.")
 
 async def status(update: Update, context: CallbackContext) -> None:
     telegram_id = update.message.from_user.id
+    logging.info("Checking status for user: %s", telegram_id)
     tasks = STATE_DICT.get(telegram_id, [])
 
     if not tasks:
