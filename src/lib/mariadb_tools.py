@@ -21,17 +21,16 @@ class MariaDBClient:
         self.password = password
         self.host = host
         self.port = port
-        self.conn = None
     
     def create_database(self, database: str):
-        self.get_conn()
-        cur = self.conn.cursor()
+        conn = self._get_conn()
+        cur = conn.cursor()
         cur.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
         cur.close()
-        self.conn.close()
+        conn.close()
 
-    def get_conn(self, database=None):
-        self.conn = mariadb.connect(
+    def _get_conn(self, database=None):
+        conn = mariadb.connect(
             user=self.user,
             password=self.password,
             host=self.host,
@@ -39,39 +38,44 @@ class MariaDBClient:
         )
         if database is not None:
             self.create_database(database)
-            self.conn = mariadb.connect(
+            conn = mariadb.connect(
                 user=self.user,
                 password=self.password,
                 host=self.host,
                 port=self.port,
                 database=database
             )
-        return self.conn
+        return conn
 
     def delete_all_tables(self):
         tables = self.get_tables()
         self.delete_tables(tables)
 
-    def get_tables(self):
-        cur = self.conn.cursor()
+    def get_tables(self, database: str):
+        conn = self._get_conn(database)
+        cur = conn.cursor()
         cur.execute(self.GET_TABLES_SQL)
         tables = cur.fetchall()
         cur.close()
         return [table[0] for table in tables]
 
     def delete_tables(self, tables):
-        cur = self.conn.cursor()
+        conn = self._get_conn()
+        cur = conn.cursor()
         for table in tables:
             sql = self.DROP_TABLE_SQL.replace(self.TABLE_PARAMETER, table)
             cur.execute(sql)
         cur.close()
+        conn.close()
 
-    def get_table_columns(self, table):
-        cur = self.conn.cursor()
+    def get_table_columns(self, table: str):
+        conn = self._get_conn()
+        cur = conn.cursor()
         sql = f"SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = N'{table}'"
         cur.execute(sql)
         columns = cur.fetchall()
         cur.close()
+        conn.close()
         return columns
 
     def source_sql(self, sql_path, db, logfile=None, encoding="utf8"):
@@ -103,8 +107,7 @@ class MariaDBClient:
 
     def dump_mariadb_db(self, database: str, output_path: str):
         output_path = Path(output_path)
-        self.get_conn(database)
-        tables = self.get_tables()
+        tables = self.get_tables(database)
         total = 0
         errors = 0
         for table in tables:
@@ -112,7 +115,7 @@ class MariaDBClient:
             table_output_path = output_path / database / (table + ".csv")
             if not os.path.exists(table_output_path):
                 try:
-                    df = self.table_to_df(table=table, log=logging)
+                    df = self.table_to_df(database=database, table=table)
                     if len(df) > 0:
                         logger.info(f"Dumping {table} with {len(df)} entries...")
                         df.to_csv(table_output_path, sep="|", escapechar='\\', index=False)
@@ -124,11 +127,12 @@ class MariaDBClient:
         return total, errors
 
     def get_databases(self):
-        self.get_conn()
-        cur = self.conn.cursor()
+        conn = self._get_conn()
+        cur = conn.cursor()
         cur.execute("SHOW DATABASES;")
         databases = [db[0] for db in cur.fetchall()]
         cur.close()
+        conn.close()
         return databases
 
     def dump_all_dbs(self, output_path: str):
@@ -146,11 +150,10 @@ class MariaDBClient:
             except Exception as e:
                 logger.error(f"Error dumping database {database}: {str(e)}")
         
-        self.conn.close()
 
-    def table_to_df(self, table, log, limit=None):
-        # TODO: maybe use native mysql client for this
-        cur = self.conn.cursor()
+    def table_to_df(self, database: str, table: str, limit: int | None = None):
+        conn = self._get_conn(database)
+        cur = conn.cursor()
         if limit is None:
             cur.execute(f"select * from {table}")
         else:
@@ -163,12 +166,14 @@ class MariaDBClient:
             logger.warning("Columns mismatch!")
             logger.warning(f"First row: {data[0]}")
             columns = columns[:len(data[0])]
+        cur.close()
+        conn.close()
         return pd.DataFrame(data, columns=columns)
 
     def delete_database(self, database: str):
         """Deletes the specified database."""
-        self.get_conn()
-        cur = self.conn.cursor()
+        conn = self._get_conn()
+        cur = conn.cursor()
         try:
             cur.execute(f"DROP DATABASE IF EXISTS {database};")
             logger.info(f"Database {database} deleted successfully.")
@@ -176,5 +181,4 @@ class MariaDBClient:
             logger.error(f"Error deleting database {database}: {str(e)}")
         finally:
             cur.close()
-            self.conn.close()
-
+            conn.close()
