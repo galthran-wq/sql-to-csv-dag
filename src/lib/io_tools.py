@@ -2,12 +2,15 @@ from __future__ import annotations
 import os
 import shutil
 import gzip
+import logging
 
 import zipfile
 import rarfile
 import tarfile
 import py7zr
 import zstandard as zstd
+
+logger = logging.getLogger(__name__)
 
 
 def extract_archive(
@@ -34,6 +37,7 @@ def extract_archive(
     archive_type = os.path.basename(archive_path).split(".")[-1]
     if extract_to is None:
         extract_to = os.path.join(os.path.dirname(archive_path), os.path.basename(archive_path).replace(f".{archive_type}", ""))
+    logger.info(f"Extracting archive {archive_path} to {extract_to}...")
     if archive_type == "zip":
         with zipfile.ZipFile(archive_path, 'r') as archive:
             archive.extractall(extract_to, pwd=password.encode() if password else None)
@@ -66,6 +70,48 @@ def extract_archive(
         if archive_type in ["sql", "csv"]:
             os.makedirs(extract_to, exist_ok=True)
             shutil.copy(archive_path, os.path.join(extract_to, os.path.basename(archive_path)))
+    return extract_to
+
+
+def extract_archive_recursive(
+    archive_path: str,
+    extract_to: str | None = None,
+    password: str | None = None,
+    archive_type: str | None = None,
+    include_trivial_types: bool = True,
+    delete_nested_archives: bool = True,
+):
+    """
+    Extracts archive_path to extract_to (or .../archive_name) folder. 
+    If archive contains other archives, they are extracted recursively and deleted if `delete_nested_archives` is True.
+    """
+    extract_to = extract_archive(
+        archive_path=archive_path, 
+        extract_to=extract_to, 
+        password=password, 
+        archive_type=archive_type, 
+        include_trivial_types=include_trivial_types
+    )
+    for root, dirs, files in os.walk(extract_to):
+        for file in files:
+            if (
+                file.endswith(".zip") or file.endswith(".rar") or file.endswith(".7z") or file.endswith(".tar") or 
+                file.endswith(".tar.gz") or file.endswith(".zst") or file.endswith(".gz")
+            ):
+                logger.info(f"Found nested archive {os.path.join(root, file)}")
+                try:
+                    extract_archive_recursive(
+                        archive_path=os.path.join(root, file), 
+                        extract_to=None, 
+                        password=None, 
+                        archive_type=None, 
+                        include_trivial_types=include_trivial_types,
+                        delete_nested_archives=delete_nested_archives
+                    )
+                    if delete_nested_archives:
+                        os.remove(os.path.join(root, file))
+                except Exception as e:
+                    logger.error(f"Error extracting nested archive {os.path.join(root, file)}: {e}")
     return extract_to
 
 
