@@ -13,7 +13,7 @@ from airflow.models.param import Param
 from src.lib.convert_sql import convert_all_files, get_files_to_convert
 from src.common.config import get_config
 from src.lib.mega_tools import upload_file_to_mega, download_file_from_mega
-from src.lib.io_tools import extract_archive, archive
+from src.lib.io_tools import extract_archive_recursive, archive
 from src.lib.mariadb_tools import MariaDBClient
 
 # Patching funcs with config values
@@ -67,7 +67,7 @@ download_task = PythonOperator(
 
 extract_task = PythonOperator(
     task_id='extract_archive',
-    python_callable=extract_archive,
+    python_callable=extract_archive_recursive,
     op_kwargs={
         'archive_path': '{{ task_instance.xcom_pull(task_ids="download_file_from_mega") }}',
         'password': '{{ params.password }}',
