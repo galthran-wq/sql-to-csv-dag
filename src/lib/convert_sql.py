@@ -150,7 +150,7 @@ def convert_file(
     # convert .sql.gz file to .sql
     if file_path.endswith(".sql.gz"):
         with gzip.open(file_path, 'rb') as f:
-            sql_content = f.read()
+            sql_content = f.read().decode('utf-8')
         with open(file_path.replace(".sql.gz", ".sql"), 'w') as f:
             f.write(sql_content)
         os.remove(file_path)
