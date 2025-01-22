@@ -10,6 +10,8 @@ from telegram.helpers import escape_markdown
 import requests
 
 from src.common.config import get_config
+from src.lib.mega_tools import upload_file_to_mega
+
 
 config = get_config()
 
@@ -31,48 +33,76 @@ async def start(update: Update, context: CallbackContext) -> None:
     logging.info("Received /start command from user: %s", update.message.from_user.id)
     await update.message.reply_text('Hi! Send me a MEGA link to start the conversion process.')
 
+async def trigger_dag(update: Update, mega_link: str, telegram_id: int) -> None:
+    response = requests.post(
+        AIRFLOW_API_URL,
+        json={"conf": {"mega_url": mega_link}},
+        auth=AUTH
+    )
+
+    if response.status_code == 200:
+        dag_run_id = response.json().get('dag_run_id')
+        logging.info("DAG triggered successfully with ID: %s", dag_run_id)
+        await update.message.reply_text("DAG triggered successfully! Monitoring execution in the background...")
+
+        # Update STATE_DICT with the new task
+        task_info = {
+            "id": dag_run_id,
+            "date": time.time(),
+            "parameters": {"mega_url": mega_link},
+            "resulting_link": None,
+            "current_step": "Triggered DAG",
+            "status": "In Progress"
+        }
+        if telegram_id not in STATE_DICT:
+            STATE_DICT[telegram_id] = []
+        STATE_DICT[telegram_id].append(task_info)
+        # Keep only the latest 20 tasks
+        STATE_DICT[telegram_id] = STATE_DICT[telegram_id][-20:]
+
+        # Monitor DAG execution in the background
+        asyncio.create_task(monitor_dag_execution(update, dag_run_id, telegram_id))
+    else:
+        logging.error("Failed to trigger DAG. Status code: %s", response.status_code)
+        await update.message.reply_text("Failed to trigger DAG.")
+
 async def handle_message(update: Update, context: CallbackContext) -> None:
-    text = update.message.text
     telegram_id = update.message.from_user.id
-    logging.info("Received message from user %s: %s", telegram_id, text)
-    if "mega.nz" in text:
-        # Extract MEGA link
-        mega_link = text.split()[0]  # Assuming the link is the first word
-        logging.info("Extracted MEGA link: %s", mega_link)
-        await update.message.reply_text(f"Received MEGA link: {mega_link}. Starting conversion...")
+    logging.info("Received message from user %s", telegram_id)
 
-        # Trigger Airflow DAG
-        response = requests.post(
-            AIRFLOW_API_URL,
-            json={"conf": {"mega_url": mega_link}},
-            auth=AUTH
-        )
+    document = update.message.document or update.message.reply_to_message.document
+    logging.info("Detected document: %s", document.file_name)
+    if document:
+        # Step 2: Download the document
+        file_id = document.file_id
+        file_name = document.file_name
+        file = await context.bot.get_file(file_id)
+        file_path = f"/tmp/{file_name}"
+        await file.download_to_drive(file_path)
+        logging.info("Downloaded file: %s", file_path)
 
-        if response.status_code == 200:
-            dag_run_id = response.json().get('dag_run_id')
-            logging.info("DAG triggered successfully with ID: %s", dag_run_id)
-            await update.message.reply_text("DAG triggered successfully! Monitoring execution in the background...")
-
-            # Update STATE_DICT with the new task
-            task_info = {
-                "id": dag_run_id,
-                "date": time.time(),
-                "parameters": {"mega_url": mega_link},
-                "resulting_link": None,
-                "current_step": "Triggered DAG",
-                "status": "In Progress"
-            }
-            if telegram_id not in STATE_DICT:
-                STATE_DICT[telegram_id] = []
-            STATE_DICT[telegram_id].append(task_info)
-            # Keep only the latest 20 tasks
-            STATE_DICT[telegram_id] = STATE_DICT[telegram_id][-20:]
-
-            # Monitor DAG execution in the background
-            asyncio.create_task(monitor_dag_execution(update, dag_run_id, telegram_id))
+        # Step 3: Upload to MEGA
+        mega_email = config.mega.email
+        mega_password = config.mega.password
+        resulting_link = upload_file_to_mega(file_path, mega_email, mega_password)
+        
+        if resulting_link:
+            logging.info("Uploaded to MEGA: %s", resulting_link)
+            await update.message.reply_text(f"File uploaded to MEGA: {resulting_link}. Starting conversion...")
+            await trigger_dag(update, resulting_link, telegram_id)
+            os.remove(file_path)
+            logging.info("Deleted temp file: %s", file_path)
         else:
-            logging.error("Failed to trigger DAG. Status code: %s", response.status_code)
-            await update.message.reply_text("Failed to trigger DAG.")
+            await update.message.reply_text("Failed to upload file to MEGA.")
+    else:
+        text = update.message.text
+        logging.info("Received message from user %s: %s", telegram_id, text)
+        if "mega.nz" in text:
+            # Extract MEGA link
+            mega_link = text.split()[0]  # Assuming the link is the first word
+            logging.info("Extracted MEGA link: %s", mega_link)
+            await update.message.reply_text(f"Received MEGA link: {mega_link}. Starting conversion...")
+            await trigger_dag(update, mega_link, telegram_id)
 
 async def monitor_dag_execution(update: Update, dag_run_id: str, telegram_id: int) -> None:
     logging.info("Monitoring DAG execution for DAG ID: %s", dag_run_id)
@@ -201,6 +231,11 @@ if __name__ == '__main__':
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(
+        (filters.TEXT & ~filters.COMMAND) | 
+        (filters.FORWARDED & filters.Document.ALL) |
+        (filters.Document.ALL), 
+        handle_message
+    ))
 
     application.run_polling()
