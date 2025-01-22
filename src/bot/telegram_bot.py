@@ -70,9 +70,13 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     telegram_id = update.message.from_user.id
     logging.info("Received message from user %s", telegram_id)
 
-    document = update.message.document or update.message.reply_to_message.document
-    logging.info("Detected document: %s", document.file_name)
-    if document:
+    document = update.message.document or (
+        update.message.reply_to_message.document
+        if update.message.reply_to_message is not None
+        else None
+    )
+    if document is not None:
+        logging.info("Detected document: %s", document.file_name)
         # Step 2: Download the document
         file_id = document.file_id
         file_name = document.file_name
