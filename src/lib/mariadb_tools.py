@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import logging
 from typing import List
@@ -21,56 +22,65 @@ class MariaDBClient:
         self.password = password
         self.host = host
         self.port = port
-        self.conn = None
+    
+    def create_database(self, database: str):
+        conn = self._get_conn()
+        cur = conn.cursor()
+        cur.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
+        cur.close()
+        conn.close()
 
-    def get_conn(self, database=None):
-        self.conn = mariadb.connect(
+    def _get_conn(self, database=None):
+        conn = mariadb.connect(
             user=self.user,
             password=self.password,
             host=self.host,
             port=self.port,
         )
         if database is not None:
-            cur = self.conn.cursor()
-            cur.execute(f"CREATE DATABASE IF NOT EXISTS {database};")
-            cur.close()
-            self.conn.close()
-            self.conn = mariadb.connect(
+            self.create_database(database)
+            conn = mariadb.connect(
                 user=self.user,
                 password=self.password,
                 host=self.host,
                 port=self.port,
                 database=database
             )
-        return self.conn
+        return conn
 
     def delete_all_tables(self):
         tables = self.get_tables()
         self.delete_tables(tables)
 
-    def get_tables(self):
-        cur = self.conn.cursor()
+    def get_tables(self, database: str):
+        conn = self._get_conn(database)
+        cur = conn.cursor()
         cur.execute(self.GET_TABLES_SQL)
         tables = cur.fetchall()
         cur.close()
         return [table[0] for table in tables]
 
     def delete_tables(self, tables):
-        cur = self.conn.cursor()
+        conn = self._get_conn()
+        cur = conn.cursor()
         for table in tables:
             sql = self.DROP_TABLE_SQL.replace(self.TABLE_PARAMETER, table)
             cur.execute(sql)
         cur.close()
+        conn.close()
 
-    def get_table_columns(self, table):
-        cur = self.conn.cursor()
+    def get_table_columns(self, table: str):
+        conn = self._get_conn()
+        cur = conn.cursor()
         sql = f"SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = N'{table}'"
         cur.execute(sql)
         columns = cur.fetchall()
         cur.close()
+        conn.close()
         return columns
 
-    def source_sql(self, sql_path, db, logfile=None, encoding="utf-8"):
+    def source_sql(self, sql_path, db, logfile=None, encoding="utf8"):
+        logger.info(f"Sourceing {sql_path} to {db}")
         process = Popen([
             'mariadb',
             f'--user={self.user}',
@@ -79,41 +89,51 @@ class MariaDBClient:
             f'--port={self.port}',
             f'--default-character-set={encoding}',
             '--max_allowed_packet=1073741824',
+            '--ssl=0',
             db,
         ], stdout=PIPE, stdin=PIPE, stderr=PIPE)
-        stdout, stderr = process.communicate(('source ' + str(sql_path)).encode("utf-8"))
+        stdout, stderr = process.communicate(('source ' + str(sql_path) + ";").encode("utf-8"))
+        stdout = stdout.decode("utf-8")
+        stderr = stderr.decode("utf-8")
+        if stdout:
+            logger.info(stdout)
+        if stderr:
+            logger.error(stderr)
         if logfile is not None:
             with open(logfile, "a") as f:
                 if stdout is not None:
-                    print(stdout.decode("utf-8"))
-                    for line in stdout.decode("utf-8"):
-                        f.write(line)
+                    f.write(stdout.decode("utf-8"))
                 if stderr is not None:
-                    for line in stderr.decode("utf-8"):
-                        f.write(line)
+                    f.write(stderr.decode("utf-8"))
 
     def dump_mariadb_db(self, database: str, output_path: str):
         output_path = Path(output_path)
-        self.get_conn(database)
-        tables = self.get_tables()
+        tables = self.get_tables(database)
+        total = 0
+        errors = 0
         for table in tables:
             os.makedirs(output_path / database, exist_ok=True)
             table_output_path = output_path / database / (table + ".csv")
             if not os.path.exists(table_output_path):
                 try:
-                    df = self.table_to_df(table=table, log=logging)
+                    df = self.table_to_df(database=database, table=table)
                     if len(df) > 0:
                         logger.info(f"Dumping {table} with {len(df)} entries...")
                         df.to_csv(table_output_path, sep="|", escapechar='\\', index=False)
+                        total += 1
                 except Exception as e:
+                    errors += 1
                     logger.error(f"Tryied dumping {table}, error: {str(e)}")
+        logger.info(f"Dumped {total} tables with {errors} errors")
+        return total, errors
 
     def get_databases(self):
-        self.get_conn()
-        cur = self.conn.cursor()
+        conn = self._get_conn()
+        cur = conn.cursor()
         cur.execute("SHOW DATABASES;")
         databases = [db[0] for db in cur.fetchall()]
         cur.close()
+        conn.close()
         return databases
 
     def dump_all_dbs(self, output_path: str):
@@ -131,10 +151,10 @@ class MariaDBClient:
             except Exception as e:
                 logger.error(f"Error dumping database {database}: {str(e)}")
         
-        self.conn.close()
 
-    def table_to_df(self, table, log, limit=None):
-        cur = self.conn.cursor()
+    def table_to_df(self, database: str, table: str, limit: int | None = None):
+        conn = self._get_conn(database)
+        cur = conn.cursor()
         if limit is None:
             cur.execute(f"select * from {table}")
         else:
@@ -142,10 +162,24 @@ class MariaDBClient:
         data = cur.fetchall()
         columns = self.get_table_columns(table)
         columns = [column[3] for column in columns]
-        log.info(f"Columns for table {table}: {columns}")
+        logger.info(f"Columns: {columns}")
         if len(data) > 0 and len(columns) != len(data[0]):
-            log.info("Columns misimatch")
+            logger.warning("Columns mismatch!")
+            logger.warning(f"First row: {data[0]}")
             columns = columns[:len(data[0])]
-        log.info(f"Columns for table {table}: {columns}")
+        cur.close()
+        conn.close()
         return pd.DataFrame(data, columns=columns)
 
+    def delete_database(self, database: str):
+        """Deletes the specified database."""
+        conn = self._get_conn()
+        cur = conn.cursor()
+        try:
+            cur.execute(f"DROP DATABASE IF EXISTS {database};")
+            logger.info(f"Database {database} deleted successfully.")
+        except mariadb.Error as e:
+            logger.error(f"Error deleting database {database}: {str(e)}")
+        finally:
+            cur.close()
+            conn.close()

@@ -1,0 +1,10 @@
+artifacts_dir: /opt/airflow/artifacts
+mega:
+  email: "your_email@example.com"
+  password: "your_password"
+mariadb:
+  user: "airflow"
+  password: "airflow"
+  host: "mariadb"
+  port: 3306
+telegram_token: "YOUR_TELEGRAM_BOT_TOKEN"
